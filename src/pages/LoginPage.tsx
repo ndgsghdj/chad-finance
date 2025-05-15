@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -6,17 +6,43 @@ import {
   Button,
   Paper,
   Divider,
+  Alert,
+  useTheme,
 } from '@mui/material';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../firebase.ts';
 
 const LoginPage = () => {
+  const navigate = useNavigate();
+  const theme = useTheme();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box
       display="flex"
       justifyContent="center"
       alignItems="center"
       minHeight="80vh"
-      sx={{ backgroundColor: '#f5f7fa' }}
+      sx={{ backgroundColor: theme.palette.background.default }}
     >
       <motion.div
         initial={{ opacity: 0, y: 40 }}
@@ -29,7 +55,8 @@ const LoginPage = () => {
             p: 6,
             borderRadius: 3,
             width: 400,
-            backgroundColor: 'white',
+            backgroundColor: (theme) => theme.palette.background.paper,
+            borderTop: `6px solid ${theme.palette.primary.main}`,
           }}
         >
           <Typography
@@ -37,6 +64,7 @@ const LoginPage = () => {
             fontWeight="bold"
             textAlign="center"
             gutterBottom
+            color="text.primary"
           >
             Login to ChadFinance
           </Typography>
@@ -50,11 +78,19 @@ const LoginPage = () => {
             Access your Math Degree Investment Portfolio
           </Typography>
 
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
           <TextField
             label="Email Address"
             variant="outlined"
             fullWidth
             margin="normal"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
           <TextField
             label="Password"
@@ -62,6 +98,8 @@ const LoginPage = () => {
             variant="outlined"
             fullWidth
             margin="normal"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
           />
 
           <Button
@@ -70,13 +108,19 @@ const LoginPage = () => {
             size="large"
             fullWidth
             sx={{ mt: 3, borderRadius: 2 }}
+            onClick={handleLogin}
+            disabled={loading}
           >
-            Sign In
+            {loading ? 'Signing In...' : 'Sign In'}
           </Button>
 
           <Divider sx={{ my: 3 }} />
 
-          <Typography variant="body2" textAlign="center" color="text.secondary">
+          <Typography
+            variant="body2"
+            textAlign="center"
+            color="text.secondary"
+          >
             New to ChadFinance? Start investing your lunch money today.
           </Typography>
         </Paper>
