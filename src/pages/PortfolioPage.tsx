@@ -39,10 +39,10 @@ import {
 
 export default function PortfolioSimulationPage() {
   const stocks: Stock[] = [
-    { name: "TechStock", geometricMean: 0.12, volatility: 0.2 },
-    { name: "BlueChip", geometricMean: 0.08, volatility: 0.15 },
+    { name: "Nivida", geometricMean: 0.166, volatility: 0.2 },
+    { name: "SPY", geometricMean: 0.25, volatility: 0.12 },
   ];
-  const bankAccount: BankAccount = { name: "Savings Plus", interestRate: 0.04 };
+  const bankAccount: BankAccount = { name: "Savings Plus", interestRate: 0.0446 };
 
   const [initialInvestment, setInitialInvestment] = useState(10000);
   const [monthlyDeposit, setMonthlyDeposit] = useState(500);
