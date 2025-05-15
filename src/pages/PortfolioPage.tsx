@@ -15,6 +15,7 @@ import {
   TableHead,
   TableRow,
   Paper,
+  TextField
 } from "@mui/material";
 
 import {
@@ -43,10 +44,11 @@ export default function PortfolioSimulationPage() {
   ];
   const bankAccount: BankAccount = { name: "Savings Plus", interestRate: 0.04 };
 
-  const initialInvestment = 10000;
-  const monthlyDeposit = 500;
-  const targetVolatility = 0.08;
-  const durationMonths = 36;
+  const [initialInvestment, setInitialInvestment] = useState(10000);
+  const [monthlyDeposit, setMonthlyDeposit] = useState(500);
+  const [targetVolatility, setTargetVolatility] = useState(0.08);
+  const [durationMonths, setDurationMonths] = useState(36);
+
 
   const [scenario, setScenario] = useState<ScenarioType>(ScenarioType.AVERAGE);
   const [simulationData, setSimulationData] = useState<
@@ -85,32 +87,59 @@ export default function PortfolioSimulationPage() {
         Portfolio Simulation
       </Typography>
 
-      <Box
-        display="flex"
-        alignItems="center"
-        gap={2}
-        mb={3}
-        flexWrap="wrap"
-      >
-        <FormControl sx={{ minWidth: 160 }}>
-          <InputLabel id="scenario-select-label">Scenario</InputLabel>
-          <Select
-            labelId="scenario-select-label"
-            id="scenario-select"
-            value={scenario}
-            label="Scenario"
-            onChange={handleScenarioChange}
-          >
-            <MenuItem value={ScenarioType.AVERAGE}>Average</MenuItem>
-            <MenuItem value={ScenarioType.BEST}>Best</MenuItem>
-            <MenuItem value={ScenarioType.WORST}>Worst</MenuItem>
-          </Select>
-        </FormControl>
+      <Box display="flex" alignItems="center" gap={2} mb={3} flexWrap="wrap">
+  <FormControl sx={{ minWidth: 160 }}>
+    <InputLabel id="scenario-select-label">Scenario</InputLabel>
+    <Select
+      labelId="scenario-select-label"
+      id="scenario-select"
+      value={scenario}
+      label="Scenario"
+      onChange={handleScenarioChange}
+    >
+      <MenuItem value={ScenarioType.AVERAGE}>Average</MenuItem>
+      <MenuItem value={ScenarioType.BEST}>Best</MenuItem>
+      <MenuItem value={ScenarioType.WORST}>Worst</MenuItem>
+    </Select>
+  </FormControl>
 
-        <Button variant="contained" onClick={runSimulation}>
-          Run Simulation
-        </Button>
-      </Box>
+  <TextField
+    label="Initial Investment ($)"
+    type="number"
+    value={initialInvestment}
+    onChange={(e) => setInitialInvestment(parseFloat(e.target.value))}
+    sx={{ width: 160 }}
+  />
+
+  <TextField
+    label="Monthly Deposit ($)"
+    type="number"
+    value={monthlyDeposit}
+    onChange={(e) => setMonthlyDeposit(parseFloat(e.target.value))}
+    sx={{ width: 160 }}
+  />
+
+  <TextField
+    label="Target Volatility"
+    type="number"
+    value={targetVolatility}
+    onChange={(e) => setTargetVolatility(parseFloat(e.target.value))}
+    sx={{ width: 160 }}
+  />
+
+  <TextField
+    label="Duration (Months)"
+    type="number"
+    value={durationMonths}
+    onChange={(e) => setDurationMonths(parseInt(e.target.value))}
+    sx={{ width: 160 }}
+  />
+
+  <Button variant="contained" onClick={runSimulation}>
+    Run Simulation
+  </Button>
+</Box>
+
 
       {simulationData && (
         <>
