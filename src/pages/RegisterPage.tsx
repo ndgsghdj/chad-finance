@@ -11,23 +11,25 @@ import {
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase.ts';
+import { useAuth } from '../context/AuthProvider.tsx';
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const theme = useTheme();
+
+  const { register } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
+  const handleRegister = async () => {
     setError('');
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await register(email, password);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.message);
@@ -66,7 +68,7 @@ const LoginPage = () => {
             gutterBottom
             color="text.primary"
           >
-            Login to ChadFinance
+            Begin Your Journey With ChadFinance
           </Typography>
 
           <Typography
@@ -108,23 +110,13 @@ const LoginPage = () => {
             size="large"
             fullWidth
             sx={{ mt: 3, borderRadius: 2 }}
-            onClick={handleLogin}
+            onClick={handleRegister}
             disabled={loading}
           >
-            {loading ? 'Signing In...' : 'Sign In'}
+            {loading ? 'Registering...' : 'Register'}
           </Button>
 
           <Divider sx={{ my: 3 }} />
-
-          <Typography
-            variant="body2"
-            textAlign="center"
-            color="text.secondary"
-            sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-            onClick={() => navigate('/register')}
-          >
-            New to ChadFinance? Start investing your lunch money today.
-          </Typography>
         </Paper>
       </motion.div>
     </Box>
@@ -132,4 +124,5 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
+
 

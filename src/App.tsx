@@ -13,6 +13,7 @@ import {
 
 import MainPage from './pages/MainPage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
+import RegisterPage from './pages/RegisterPage.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 import InvestmentSimulatorPage from './pages/InvestmentSimulatorPage.tsx'; // import your simulator
 import SimulatorPage from './pages/SimulatorPage.tsx';
@@ -21,6 +22,7 @@ import PortfolioPage from './pages/PortfolioPage.tsx'
 import { AuthProvider } from './context/AuthProvider.tsx';
 import PrivateRoute from './components/PrivateRoute.tsx';
 import PrivateLayout from './components/PrivateLayout.tsx'; // new layout with sidebar
+import Bar from './components/Bar.tsx';
 
 const theme = createTheme({
   palette: {
@@ -53,31 +55,11 @@ export default function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <Router>
-          <AppBar position="sticky" elevation={3}>
-            <Toolbar sx={{ justifyContent: 'space-between' }}>
-              <Typography
-                variant="h6"
-                component={Link}
-                to="/"
-                color="inherit"
-                sx={{ textDecoration: 'none' }}
-              >
-                ChadFinance
-              </Typography>
-              <div>
-                <Button component={Link} to="/" color="inherit">
-                  Home
-                </Button>
-                <Button component={Link} to="/login" color="inherit">
-                  Login
-                </Button>
-              </div>
-            </Toolbar>
-          </AppBar>
-
+          <Bar/>
           <Routes>
             <Route path="/" element={<MainPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
 
             <Route
               path="/dashboard"

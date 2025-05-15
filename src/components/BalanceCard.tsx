@@ -24,7 +24,8 @@ const BalanceCard: React.FC<BalanceCardProps> = ({ user }) => {
   useEffect(() => {
     const fetchBalance = async () => {
       try {
-        const res = await fetch(`https://script.google.com/macros/s/AKfycbwdakjQSyDMPkB2HU1I8sZPouCz4xLVCsPgQwrqooaOzbyD-zMsOQoBEVEFoAUlRoSR/exec?account=${user}`);
+        // const res = await fetch(`https://script.google.com/macros/s/AKfycbwdakjQSyDMPkB2HU1I8sZPouCz4xLVCsPgQwrqooaOzbyD-zMsOQoBEVEFoAUlRoSR/exec?account=${user}`);
+        const res = await fetch(`https://script.google.com/macros/s/AKfycbwdakjQSyDMPkB2HU1I8sZPouCz4xLVCsPgQwrqooaOzbyD-zMsOQoBEVEFoAUlRoSR/exec?account=admin@gmail.com`);
         if (!res.ok) throw new Error('Failed to fetch balance');
         const data = await res.json();
         setBalance(data[0].balance);
