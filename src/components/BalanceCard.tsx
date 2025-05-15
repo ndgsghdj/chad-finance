@@ -6,12 +6,15 @@ import {
   CircularProgress,
   Box,
   Alert,
+  Divider,
 } from '@mui/material';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
 interface BalanceCardProps {
   user: string;
 }
+
+const TARGET_GOAL = 82600;
 
 const BalanceCard: React.FC<BalanceCardProps> = ({ user }) => {
   const [balance, setBalance] = useState<number | null>(null);
@@ -34,6 +37,8 @@ const BalanceCard: React.FC<BalanceCardProps> = ({ user }) => {
 
     fetchBalance();
   }, [user]);
+
+  const remaining = balance !== null ? TARGET_GOAL - balance : null;
 
   return (
     <Card
@@ -58,9 +63,17 @@ const BalanceCard: React.FC<BalanceCardProps> = ({ user }) => {
         ) : error ? (
           <Alert severity="error">{error}</Alert>
         ) : (
-          <Typography variant="h4" fontWeight="bold">
-            ${balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </Typography>
+          <>
+            <Typography variant="h4" fontWeight="bold">
+              ${balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </Typography>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Typography variant="body1" color="text.secondary">
+              You’re <strong>${remaining!.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong> away from your $82,600 goal.
+            </Typography>
+          </>
         )}
       </CardContent>
     </Card>
@@ -68,5 +81,4 @@ const BalanceCard: React.FC<BalanceCardProps> = ({ user }) => {
 };
 
 export default BalanceCard;
-
 

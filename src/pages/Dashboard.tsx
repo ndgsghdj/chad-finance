@@ -28,7 +28,7 @@ const cardVariants = {
 };
 
 const sections = [
-  { title: '📈 Progress Tracker', description: 'Monitor savings and goals.' },
+  { title: '📈 Your Goal', description: '$82,600' },
   { title: '📊 Investment Plans', description: 'Explore funding strategies.' },
   { title: '📝 Expense Journal', description: 'Track spending habits.' },
 ];
@@ -73,40 +73,6 @@ const Dashboard = () => {
           <BalanceCard user={user.email} />
         </Box>
 
-        <Grid container spacing={4} mt={1}>
-          {sections.map((section, i) => (
-            <Grid item xs={12} sm={6} md={4} key={section.title}>
-              <motion.div
-                variants={cardVariants}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                custom={i}
-              >
-                <Paper
-                  elevation={4}
-                  sx={{
-                    p: 3,
-                    borderRadius: 3,
-                    backgroundColor: '#1e222b',
-                    color: 'white',
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <Typography variant="h6" gutterBottom>
-                    {section.title}
-                  </Typography>
-                  <Typography variant="body2" color="grey.400">
-                    {section.description}
-                  </Typography>
-                </Paper>
-              </motion.div>
-            </Grid>
-          ))}
-        </Grid>
       </Container>
     </Box>
   );
