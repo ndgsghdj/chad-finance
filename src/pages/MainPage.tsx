@@ -15,6 +15,8 @@ import SchoolIcon from '@mui/icons-material/School';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import WorkIcon from '@mui/icons-material/Work';
 import { motion } from 'framer-motion';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthProvider.tsx'
 
 const incomeSources = [
   {
@@ -58,6 +60,11 @@ const fadeInUp = {
 
 const MainPage = () => {
   const theme = useTheme();
+  const { user } = useAuth();
+
+  if (user) {
+      return <Navigate to="/dashboard" />;
+  }
 
   return (
     <Container maxWidth="md" sx={{ py: 8 }}>
