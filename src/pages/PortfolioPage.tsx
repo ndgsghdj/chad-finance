@@ -40,7 +40,7 @@ import {
 export default function PortfolioSimulationPage() {
   const stocks: Stock[] = [
     { name: "Nvidia", geometricMean: 0.166, volatility: 0.2 },
-    { name: "SPY (Part of SMP 500)", geometricMean: 0.25, volatility: 0.12 },
+    { name: "SPY (SMP 500)", geometricMean: 0.25, volatility: 0.12 },
   ];
   const bankAccount: BankAccount = { name: "Savings Plus", interestRate: 0.0446 };
 
