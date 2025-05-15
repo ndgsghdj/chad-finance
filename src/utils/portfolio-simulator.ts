@@ -1,10 +1,8 @@
-// --- Enums and Interfaces ---
 export enum ScenarioType {
     BEST = 'BEST',
     AVERAGE = 'AVERAGE',
     WORST = 'WORST',
 }
-
 
 interface Stock {
     name: string;
@@ -24,9 +22,21 @@ interface MonthlySimulatedPortfolioState {
     bankValue: number;                            // Dollar value of bank holding
     totalPortfolioValue: number;                  // Sum of all holdings
     totalCapitalInvested: number;                 // Cumulative sum of initial + all monthly deposits
-    // Optional: for detailed analysis
-    // appliedStockReturns?: { [stockName: string]: number }; // Actual random return applied to each stock for the month
-    // targetAllocations?: PortfolioAllocationResult; // The allocation calculated by PortfolioCalculator for this month
+}
+
+interface StockAllocationResult {
+    name: string;
+    amount: number;
+    weightInBasket: number;
+    weightInTotal: number;
+}
+
+interface PortfolioAllocationResult {
+    stocks: StockAllocationResult[];
+    bankAllocation: { name: string; amount: number; weightInTotal: number; };
+    basketMetrics: { expectedReturn: number; volatility: number; sharpeRatio?: number; };
+    targetPortfolioVolatility: number;
+    totalInvestment: number;
 }
 
 class PortfolioCalculator {
@@ -40,8 +50,34 @@ class PortfolioCalculator {
         bankAccount: BankAccount,
         targetPortfolioVolatility: number,
         correlation: number = this.DEFAULT_CORRELATION
-    ): PortfolioAllocationResult { // Using the interface defined in the prompt
+    ): PortfolioAllocationResult {
         this.validateInputs(totalAmount, stocks, bankAccount, targetPortfolioVolatility, correlation);
+
+        if (stocks.length === 0) {
+            if (targetPortfolioVolatility === 0) {
+                // If no stocks and target volatility is zero, 100% must be in the bank account.
+                return {
+                    stocks: [],
+                    bankAllocation: {
+                        name: bankAccount.name,
+                        amount: totalAmount,
+                        weightInTotal: totalAmount > 0 ? 100 : 0, // Avoid 100% if totalAmount is 0
+                    },
+                    basketMetrics: {
+                        expectedReturn: 0,
+                        volatility: 0,
+                        sharpeRatio: 0,
+                    },
+                    targetPortfolioVolatility: 0,
+                    totalInvestment: totalAmount,
+                };
+            } else {
+                throw new Error(
+                    `Cannot achieve target volatility of ${targetPortfolioVolatility * 100}% with no stocks available for investment.`
+                );
+            }
+        }
+
         const riskFreeRate = bankAccount.interestRate;
         const stockSharpeRatios = this.calculateStockSharpeRatios(stocks, riskFreeRate);
         const basketWeights = this.calculateBasketWeights(stockSharpeRatios, stocks.map(s => s.name));
@@ -49,17 +85,20 @@ class PortfolioCalculator {
 
         let basketWeightInPortfolio: number;
         if (basketMetrics.volatility === 0) {
+            // Basket has zero volatility.
+            // If target is also zero, then it depends on whether basket return > risk-free rate.
             if (targetPortfolioVolatility === 0) {
-                basketWeightInPortfolio = 0;
-                if (basketMetrics.expectedReturn > riskFreeRate) {
-                    basketWeightInPortfolio = 1;
-                }
+                // If basket return is better, take it (100% basket, 0% bank).
+                // If bank is better or equal, take bank (0% basket, 100% bank).
+                basketWeightInPortfolio = (basketMetrics.expectedReturn > riskFreeRate) ? 1 : 0;
             } else {
+                // Basket has zero vol, but target is non-zero. This is unachievable.
                 throw new Error(
-                    `Cannot achieve target volatility of ${targetPortfolioVolatility * 100}% because the stock basket has zero volatility, and target is non-zero.`
+                    `Cannot achieve target volatility of ${targetPortfolioVolatility * 100}% because the stock basket has zero volatility, and the target is non-zero.`
                 );
             }
         } else {
+            // Basket has non-zero volatility, can target.
             basketWeightInPortfolio = targetPortfolioVolatility / basketMetrics.volatility;
         }
 
@@ -90,14 +129,18 @@ class PortfolioCalculator {
             totalInvestment: totalAmount,
         };
     }
+
     private validateInputs( totalAmount: number, stocks: Stock[], bankAccount: BankAccount, targetPortfolioVolatility: number, correlation: number ): void {
-        if (totalAmount <= 0 && stocks.length > 0) {
-            throw new Error("Total investment amount must be positive if stocks are involved in allocation.");
+        // Allow totalAmount to be 0 for initial setup, but if stocks are involved and amount is <=0 for allocation, it's an issue.
+        if (totalAmount < 0) { // Changed from totalAmount <= 0
+             throw new Error("Total investment amount cannot be negative.");
         }
-        if (stocks.length === 0 && targetPortfolioVolatility > 0 && totalAmount > 0) {
-            // If only bank, target vol must be 0.
-            // This case is implicitly handled by basket volatility being 0 if no stocks.
+        if (totalAmount === 0 && stocks.length > 0 && targetPortfolioVolatility > 0) {
+            // This scenario is tricky. If you have 0 amount but want to calculate weights for a target vol,
+            // the amounts will be 0. The current structure handles this by returning 0 amounts.
+            // If totalAmount is 0, weights in total are less meaningful until an amount is applied.
         }
+
         stocks.forEach(stock => {
             if (stock.volatility <= 0) {
                 throw new Error(`Volatility for stock ${stock.name} must be positive.`);
@@ -118,25 +161,40 @@ class PortfolioCalculator {
             throw new Error(`Correlation coefficient must be between -1 and 1. Received: ${correlation}`);
         }
     }
+
     private calculateStockSharpeRatios(stocks: Stock[], riskFreeRate: number): number[] {
         return stocks.map(stock => {
             if (stock.volatility === 0) { return (stock.geometricMean - riskFreeRate) > 0 ? Infinity : (stock.geometricMean - riskFreeRate) < 0 ? -Infinity : 0; }
             return (stock.geometricMean - riskFreeRate) / stock.volatility;
         });
     }
+
     private calculateBasketWeights(stockSharpeRatios: number[], stockNames: string[]): number[] {
-        const totalSharpe = stockSharpeRatios.reduce((sum, ratio) => sum + ratio, 0);
-        if (totalSharpe === 0) {
-            if (stockSharpeRatios.every(ratio => ratio === 0)) {
+        const positiveSharpeRatios = stockSharpeRatios.filter(r => r > 0);
+        const sumPositiveSharpe = positiveSharpeRatios.reduce((sum, ratio) => sum + ratio, 0);
+
+        if (sumPositiveSharpe === 0) {
+            // No stocks with positive Sharpe ratios.
+            // If all Sharpe ratios are <= 0:
+            if (stockSharpeRatios.every(ratio => ratio <= 0)) {
+                // If there are any stocks, distribute equally among them.
+                // This is a neutral stance when no stock is "better" based on Sharpe.
+                // Or, one might argue to not invest in stocks at all if all Sharpe <=0.
+                // For now, equal weight if any stocks exist.
                 return stockSharpeRatios.length > 0 ? stockSharpeRatios.map(() => 1 / stockSharpeRatios.length) : [];
             }
-
-             throw new Error(
-                "Cannot determine Sharpe-weighted basket weights: Total Sharpe ratio of stocks is zero due to cancelling positive and negative individual Sharpe ratios."
+            // This case (some positive, some negative, summing to zero or less for positive ones)
+            // implies an issue or a very specific scenario not typically handled by simple Sharpe weighting.
+            // The original code threw an error if totalSharpe was 0 due to cancelling ratios.
+            // We now focus on positive Sharpe ratios for weighting.
+            throw new Error(
+                "Cannot determine Sharpe-weighted basket weights: Sum of positive Sharpe ratios is zero. Consider alternative weighting or if stocks are suitable."
             );
         }
-        return stockSharpeRatios.map(ratio => ratio / totalSharpe);
+        // Weight only based on stocks with positive Sharpe ratios
+        return stockSharpeRatios.map(ratio => (ratio > 0 ? ratio / sumPositiveSharpe : 0));
     }
+
     private calculateBasketMetrics( stocks: Stock[], basketWeights: number[], riskFreeRate: number, correlation: number ): { expectedReturn: number; volatility: number; sharpeRatio?: number } {
         const basketExpectedReturn = stocks.reduce( (sum, stock, index) => sum + basketWeights[index] * stock.geometricMean, 0 );
         let basketVariance = 0;
@@ -151,29 +209,18 @@ class PortfolioCalculator {
         if (basketVolatility > 0) {
             basketSharpeRatio = (basketExpectedReturn - riskFreeRate) / basketVolatility;
         } else if (basketExpectedReturn - riskFreeRate === 0) {
-             basketSharpeRatio = 0;
+             basketSharpeRatio = 0; // Neutral Sharpe if no excess return and no vol
         } else {
+            // Zero volatility but non-zero excess return
             basketSharpeRatio = (basketExpectedReturn > riskFreeRate) ? Infinity : -Infinity;
         }
         return { expectedReturn: basketExpectedReturn, volatility: basketVolatility, sharpeRatio: basketSharpeRatio };
     }
 }
-// Interface for PortfolioAllocationResult (as defined in your prompt)
-interface PortfolioAllocationResult {
-    stocks: StockAllocationResult[];
-    bankAllocation: { name: string; amount: number; weightInTotal: number; };
-    basketMetrics: { expectedReturn: number; volatility: number; sharpeRatio?: number; };
-    targetPortfolioVolatility: number;
-    totalInvestment: number;
-}
-interface StockAllocationResult { name: string; amount: number; weightInBasket: number; weightInTotal: number;}
 
-
-// --- Advanced Simulator Class ---
 export class AdvancedPortfolioSimulator {
     private portfolioCalc: PortfolioCalculator;
 
-    // Scenario adjustment factors
     private readonly BEST_CASE_RETURN_MULTIPLIER = 1.5;
     private readonly BEST_CASE_VOL_MULTIPLIER = 0.6;
     private readonly WORST_CASE_RETURN_MULTIPLIER = 0.3;
@@ -189,15 +236,15 @@ export class AdvancedPortfolioSimulator {
         while (u === 0) u = Math.random();
         while (v === 0) v = Math.random();
         let num = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-        return Math.max(-3.5, Math.min(3.5, num)); // Clip
+        return Math.max(-3.5, Math.min(3.5, num)); // Clip to +/- 3.5 std dev
     }
 
     public simulateInvestmentStrategy(
         initialInvestment: number,
         monthlyDeposit: number,
-        stocks: Stock[], // Annual figures
-        bankAccount: BankAccount, // Annual rate
-        targetOverallVolatility: number, // Decimal, e.g., 0.06
+        stocks: Stock[],
+        bankAccount: BankAccount,
+        targetOverallVolatility: number,
         durationInMonths: number,
         scenario: ScenarioType,
         correlation: number = 0.6
@@ -208,6 +255,10 @@ export class AdvancedPortfolioSimulator {
         if (durationInMonths < 0 || !Number.isInteger(durationInMonths)) {
             throw new Error("Duration must be a non-negative integer.");
         }
+        if (stocks.length === 0 && targetOverallVolatility > 0) {
+            throw new Error("Cannot achieve a non-zero target volatility with no stocks.");
+        }
+
 
         const history: MonthlySimulatedPortfolioState[] = [];
         let currentStockHoldings: { [name: string]: number } = {};
@@ -225,8 +276,8 @@ export class AdvancedPortfolioSimulator {
                 initialAlloc.stocks.forEach(sAlloc => { currentStockHoldings[sAlloc.name] = sAlloc.amount; });
                 currentBankHolding = initialAlloc.bankAllocation.amount;
             } catch (e) {
-                 console.warn(`Month 0: Could not calculate initial allocation: ${(e as Error).message}. Starting with all in bank if possible, or 0.`);
-                 currentBankHolding = initialInvestment; // Default to bank if allocation fails
+                 console.warn(`Month 0: Could not calculate initial allocation: ${(e as Error).message}. Defaulting to all in bank.`);
+                 currentBankHolding = initialInvestment;
                  stocks.forEach(s => currentStockHoldings[s.name] = 0);
             }
         }
@@ -245,7 +296,6 @@ export class AdvancedPortfolioSimulator {
         for (let m = 1; m <= durationInMonths; m++) {
             // 1. Simulate Growth on Existing Holdings
             const grownStockHoldings: { [name: string]: number } = {};
-            // const appliedReturns: { [name: string]: number } = {}; // Optional for detailed output
 
             for (const stock of stocks) {
                 const monthlyExpectedReturn = stock.geometricMean / 12;
@@ -257,24 +307,25 @@ export class AdvancedPortfolioSimulator {
                     case ScenarioType.BEST:
                         const bestMean = monthlyExpectedReturn * this.BEST_CASE_RETURN_MULTIPLIER;
                         const bestVol = monthlyVolatility * this.BEST_CASE_VOL_MULTIPLIER;
-                        actualMonthlyReturn = bestMean + Math.abs(randomFactor) * bestVol;
+                        actualMonthlyReturn = bestMean + Math.abs(randomFactor) * bestVol; // Use Math.abs for consistently positive random shock in best case
                         break;
                     case ScenarioType.WORST:
                         const worstMean = (monthlyExpectedReturn * this.WORST_CASE_RETURN_MULTIPLIER) + this.WORST_CASE_ADDITIONAL_NEGATIVE_BIAS;
                         const worstVol = monthlyVolatility * this.WORST_CASE_VOL_MULTIPLIER;
-                        actualMonthlyReturn = worstMean + randomFactor * worstVol;
+                        actualMonthlyReturn = worstMean + randomFactor * worstVol; // randomFactor can be negative here
                         break;
                     case ScenarioType.AVERAGE:
                     default:
                         actualMonthlyReturn = monthlyExpectedReturn + randomFactor * monthlyVolatility;
                         break;
                 }
-                actualMonthlyReturn = Math.max(-1, actualMonthlyReturn); // Cap loss
-                // appliedReturns[stock.name] = actualMonthlyReturn;
+                actualMonthlyReturn = Math.max(-1, actualMonthlyReturn); // Cap loss at -100% for the month
                 grownStockHoldings[stock.name] = (currentStockHoldings[stock.name] || 0) * (1 + actualMonthlyReturn);
             }
 
             const monthlyBankRate = bankAccount.interestRate / 12;
+            // Bank interest applies to positive balances; debt might accrue at a different (higher) rate,
+            // but for simplicity, we use the same rate or assume it's part of the "bank" cost.
             const grownBankHolding = currentBankHolding * (1 + monthlyBankRate);
 
             // 2. Calculate Portfolio Value After Growth
@@ -293,88 +344,123 @@ export class AdvancedPortfolioSimulator {
                     newAlloc.stocks.forEach(sAlloc => { currentStockHoldings[sAlloc.name] = sAlloc.amount; });
                     currentBankHolding = newAlloc.bankAllocation.amount;
                 } catch (e) {
-                    // If allocation fails (e.g., due to zero total Sharpe and conflicting individual Sharpes),
-                    // hold previous allocation proportions or default to all in bank.
-                    // For simplicity here, we'll try to maintain proportions or put new money in bank.
-                    console.warn(`Month ${m}: Re-allocation failed: ${(e as Error).message}. Holding previous structure or adding to bank.`);
-                    // A simple fallback: add new deposit to bank, keep stock values as grown.
-                    // This isn't true rebalancing but prevents crash.
+                    console.warn(`Month ${m}: Re-allocation failed: ${(e as Error).message}. Holding grown values and adding deposit to bank portion.`);
+                    // Fallback: keep stock values as they grew. The remainder of totalCapitalForReallocation
+                    // (which includes the new deposit) effectively goes to the bank portion.
                     currentStockHoldings = { ...grownStockHoldings };
-                    currentBankHolding = grownBankHolding + monthlyDeposit;
+                    let sumOfGrownStocks = 0;
+                    for (const stockName in grownStockHoldings) {
+                        sumOfGrownStocks += grownStockHoldings[stockName];
+                    }
+                    currentBankHolding = totalCapitalForReallocation - sumOfGrownStocks;
                 }
-            } else { // Portfolio wiped out
+            } else { // totalCapitalForReallocation <= 0 (Portfolio wiped out or in debt)
+                // All assets are effectively liquidated (or considered valueless against the debt).
+                // The remaining totalCapitalForReallocation is the net debt (if negative) or zero.
+                // This amount is now entirely in the "bank" as a negative balance (debt).
                 stocks.forEach(s => currentStockHoldings[s.name] = 0);
-                currentBankHolding = 0;
+                currentBankHolding = totalCapitalForReallocation; // Persists debt
             }
             
-            // Ensure no negative values due to extreme rounding or logic errors
-            Object.keys(currentStockHoldings).forEach(key => { currentStockHoldings[key] = Math.max(0, currentStockHoldings[key]); });
-            currentBankHolding = Math.max(0, currentBankHolding);
-
+            // Ensure individual stock holdings are not negative (e.g. due to extreme rounding).
+            // Bank holding can be negative (representing debt/leverage).
+            Object.keys(currentStockHoldings).forEach(key => {
+                currentStockHoldings[key] = Math.max(0, currentStockHoldings[key]);
+            });
+            // DO NOT do Math.max(0, currentBankHolding) here if leverage is allowed.
 
             const currentTotalValue = Object.values(currentStockHoldings).reduce((a, b) => a + b, 0) + currentBankHolding;
 
+            // Sanity check: currentTotalValue should be very close to totalCapitalForReallocation if allocation succeeded,
+            // or reflect the post-growth/deposit state if allocation failed or portfolio was wiped.
+            // Small discrepancies due to floating point arithmetic are possible.
+            if (Math.abs(currentTotalValue - totalCapitalForReallocation) > 1e-5 && totalCapitalForReallocation > 0) { // 1e-5 is a small tolerance
+                 // console.warn(`Month ${m}: Discrepancy between currentTotalValue (${currentTotalValue.toFixed(2)}) and totalCapitalForReallocation (${totalCapitalForReallocation.toFixed(2)})`);
+                 // This might happen if allocation logic has an issue or due to the fallback.
+                 // Forcing consistency if a significant discrepancy:
+                 // If currentBankHolding was calculated from a successful allocation, it should be fine.
+                 // If from fallback, it was totalCapitalForReallocation - sumOfGrownStocks.
+                 // If from wipeout, currentBankHolding = totalCapitalForReallocation, and stocks are 0.
+                 // The sum should naturally equal totalCapitalForReallocation.
+            }
+
+
             history.push({
                 month: m,
-                stockValues: { ...currentStockHoldings },
+                stockValues: { ...currentStockHoldings }, // Store copies
                 bankValue: parseFloat(currentBankHolding.toFixed(2)),
                 totalPortfolioValue: parseFloat(currentTotalValue.toFixed(2)),
                 totalCapitalInvested: parseFloat(cumulativeCapitalInvested.toFixed(2)),
-                // appliedStockReturns: appliedReturns, // Optional
             });
         }
         return history;
     }
 }
 
-// --- Example Usage ---
+// Example Usage (Illustrative - you'd replace with your actual inputs)
 /*
+const simulator = new AdvancedPortfolioSimulator();
+
+const myStocks: Stock[] = [
+    { name: "NIVIDA", geometricMean: 0.45, volatility: 0.5251 }, // Hypothetical annual numbers
+    { name: "SMP500", geometricMean: 0.10, volatility: 0.1266 }  // Hypothetical annual numbers
+];
+
+const myBankAccount: BankAccount = {
+    name: "My Savings",
+    interestRate: 0.03 // 3% annual
+};
+
+const results = simulator.simulateInvestmentStrategy(
+    10000,        // initialInvestment
+    500,          // monthlyDeposit
+    myStocks,
+    myBankAccount,
+    0.15,         // targetOverallVolatility (e.g., 15%)
+    36,           // durationInMonths
+    ScenarioType.AVERAGE,
+    0.3           // correlation
+);
+
+console.log(results[results.length-1]);
+
+// Test with high volatility target
+const highVolResults = simulator.simulateInvestmentStrategy(
+    10000,
+    500,
+    myStocks,
+    myBankAccount,
+    1.0, // 100% target volatility (implies high leverage)
+    36,
+    ScenarioType.AVERAGE,
+    0.3
+);
+console.log("High Volatility Target:", highVolResults[highVolResults.length-1]);
+
+// Test with 0 stocks
+const noStockResults = simulator.simulateInvestmentStrategy(
+    10000,
+    500,
+    [], // No stocks
+    myBankAccount,
+    0, // Target volatility must be 0 if no stocks
+    12,
+    ScenarioType.AVERAGE
+);
+console.log("No Stocks:", noStockResults[noStockResults.length-1]);
+
 try {
-    const simulator = new AdvancedPortfolioSimulator();
-
-    const myStocks: Stock[] = [
-        { name: "TechStock", geometricMean: 0.12, volatility: 0.20 }, // 12% return, 20% vol
-        { name: "BlueChip", geometricMean: 0.08, volatility: 0.15 },  // 8% return, 15% vol
-    ];
-    const myBankAccount: BankAccount = { name: "Savings Plus", interestRate: 0.04 }; // 4%
-
-    const initial = 10000;
-    const monthly = 500;
-    const targetVol = 0.08; // 8% target portfolio volatility
-    const duration = 36;    // 3 years
-
-    console.log(`\nADVANCED SIMULATION`);
-    console.log(`Initial: $${initial}, Monthly: $${monthly}, Target Vol: ${targetVol*100}%, Duration: ${duration} months`);
-
-    // AVERAGE Case
-    console.log("\nAVERAGE SCENARIO");
-    const avgResults = simulator.simulateInvestmentStrategy(initial, monthly, myStocks, myBankAccount, targetVol, duration, ScenarioType.AVERAGE);
-    avgResults.slice(0, 5).concat(avgResults.slice(-5)).forEach(r => { // Show first 5 and last 5 months
-        let stockDetail = Object.entries(r.stockValues).map(([name, val]) => `${name}: $${val.toFixed(2)}`).join(', ');
-        console.log(`M ${r.month}: Total $${r.totalPortfolioValue.toFixed(2)} (Invested $${r.totalCapitalInvested.toFixed(2)}) | Bank: $${r.bankValue.toFixed(2)} | Stocks: [${stockDetail}]`);
-    });
-
-    // BEST Case
-    console.log("\nBEST SCENARIO");
-    const bestResults = simulator.simulateInvestmentStrategy(initial, monthly, myStocks, myBankAccount, targetVol, duration, ScenarioType.BEST);
-    bestResults.slice(0, 5).concat(bestResults.slice(-5)).forEach(r => {
-        let stockDetail = Object.entries(r.stockValues).map(([name, val]) => `${name}: $${val.toFixed(2)}`).join(', ');
-        console.log(`M ${r.month}: Total $${r.totalPortfolioValue.toFixed(2)} (Invested $${r.totalCapitalInvested.toFixed(2)}) | Bank: $${r.bankValue.toFixed(2)} | Stocks: [${stockDetail}]`);
-    });
-
-    // WORST Case
-    console.log("\nWORST SCENARIO");
-    const worstResults = simulator.simulateInvestmentStrategy(initial, monthly, myStocks, myBankAccount, targetVol, duration, ScenarioType.WORST);
-    worstResults.slice(0, 5).concat(worstResults.slice(-5)).forEach(r => {
-        let stockDetail = Object.entries(r.stockValues).map(([name, val]) => `${name}: $${val.toFixed(2)}`).join(', ');
-        console.log(`M ${r.month}: Total $${r.totalPortfolioValue.toFixed(2)} (Invested $${r.totalCapitalInvested.toFixed(2)}) | Bank: $${r.bankValue.toFixed(2)} | Stocks: [${stockDetail}]`);
-    });
-
-} catch (error) {
-    if (error instanceof Error) {
-        console.error("Error during advanced portfolio simulation:", error.message);
-    } else {
-        console.error("An unknown error occurred:", error);
-    }
+    const invalidNoStockResults = simulator.simulateInvestmentStrategy(
+        10000,
+        500,
+        [], // No stocks
+        myBankAccount,
+        0.05, // Target volatility > 0 with no stocks should fail
+        12,
+        ScenarioType.AVERAGE
+    );
+    console.log("Invalid No Stocks (should not reach here):", invalidNoStockResults[invalidNoStockResults.length-1]);
+} catch (e) {
+    console.error("Error with invalid no-stock scenario:", (e as Error).message);
 }
 */
